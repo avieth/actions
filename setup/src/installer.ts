@@ -8,6 +8,7 @@ import {ghcup_version, OS, Tool} from './opts';
 import process from 'process';
 import * as glob from '@actions/glob';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 
 // Don't throw on non-zero.
 const exec = async (cmd: string, args?: string[]): Promise<number> =>
@@ -237,7 +238,8 @@ async function apt(tool: Tool, version: string): Promise<void> {
 async function choco(tool: Tool, version: string): Promise<void> {
   core.info(`Attempting to install ${tool} ${version} using chocolatey`);
   // Choco tries to invoke `add-path` command on earlier versions of ghc, which has been deprecated and fails the step, so disable command execution during this.
-  console.log('::stop-commands::SetupHaskellStopCommands');
+  const token = crypto.randomBytes(32).toString('hex');
+  console.log(`::stop-commands::${token}`);
   const args = [
     'choco',
     'install',
@@ -250,7 +252,7 @@ async function choco(tool: Tool, version: string): Promise<void> {
   ];
   if ((await exec('powershell', args)) !== 0)
     await exec('powershell', [...args, '--pre']);
-  console.log('::SetupHaskellStopCommands::'); // Re-enable command execution
+  console.log(`::${token}::`); // Re-enable command execution
   // Add GHC to path automatically because it does not add until the end of the step and we check the path.
 
   const chocoPath = await getChocoPath(tool, version);

@@ -1199,7 +1199,7 @@ const rv = __importStar(__webpack_require__(859));
 exports.release_revisions = rv;
 exports.supported_versions = sv;
 exports.ghcup_version = sv.ghcup[0]; // Known to be an array of length 1
-exports.yamlInputs = js_yaml_1.load(fs_1.readFileSync(__webpack_require__.ab + "action.yml", 'utf8')
+exports.yamlInputs = (0, js_yaml_1.load)((0, fs_1.readFileSync)((0, path_1.join)(__dirname, '..', 'action.yml'), 'utf8')
 // The action.yml file structure is statically known.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ).inputs;
@@ -1303,7 +1303,7 @@ module.exports = __webpack_require__(407);
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toCommandValue = void 0;
+exports.toCommandProperties = exports.toCommandValue = void 0;
 /**
  * Sanitizes an input into a string so it can be passed into issueCommand safely
  * @param input input to sanitize into a string
@@ -1318,6 +1318,26 @@ function toCommandValue(input) {
     return JSON.stringify(input);
 }
 exports.toCommandValue = toCommandValue;
+/**
+ *
+ * @param annotationProperties
+ * @returns The command properties to send with the actual annotation command
+ * See IssueCommandProperties: https://github.com/actions/runner/blob/main/src/Runner.Worker/ActionCommandManager.cs#L646
+ */
+function toCommandProperties(annotationProperties) {
+    if (!Object.keys(annotationProperties).length) {
+        return {};
+    }
+    return {
+        title: annotationProperties.title,
+        file: annotationProperties.file,
+        line: annotationProperties.startLine,
+        endLine: annotationProperties.endLine,
+        col: annotationProperties.startColumn,
+        endColumn: annotationProperties.endColumn
+    };
+}
+exports.toCommandProperties = toCommandProperties;
 //# sourceMappingURL=utils.js.map
 
 /***/ }),
@@ -2471,7 +2491,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const core = __importStar(__webpack_require__(470));
 const opts_1 = __webpack_require__(54);
 const setup_haskell_1 = __importDefault(__webpack_require__(661));
-setup_haskell_1.default(Object.fromEntries(Object.keys(opts_1.yamlInputs).map(k => [k, core.getInput(k)])));
+(0, setup_haskell_1.default)(Object.fromEntries(Object.keys(opts_1.yamlInputs).map(k => [k, core.getInput(k)])));
 
 
 /***/ }),
@@ -3096,6 +3116,72 @@ module.exports = new Type('tag:yaml.org,2002:pairs', {
   resolve: resolveYamlPairs,
   construct: constructYamlPairs
 });
+
+
+/***/ }),
+
+/***/ 226:
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class BasicCredentialHandler {
+    constructor(username, password) {
+        this.username = username;
+        this.password = password;
+    }
+    prepareRequest(options) {
+        options.headers['Authorization'] =
+            'Basic ' +
+                Buffer.from(this.username + ':' + this.password).toString('base64');
+    }
+    // This handler cannot handle 401
+    canHandleAuthentication(response) {
+        return false;
+    }
+    handleAuthentication(httpClient, requestInfo, objs) {
+        return null;
+    }
+}
+exports.BasicCredentialHandler = BasicCredentialHandler;
+class BearerCredentialHandler {
+    constructor(token) {
+        this.token = token;
+    }
+    // currently implements pre-authorization
+    // TODO: support preAuth = false where it hooks on 401
+    prepareRequest(options) {
+        options.headers['Authorization'] = 'Bearer ' + this.token;
+    }
+    // This handler cannot handle 401
+    canHandleAuthentication(response) {
+        return false;
+    }
+    handleAuthentication(httpClient, requestInfo, objs) {
+        return null;
+    }
+}
+exports.BearerCredentialHandler = BearerCredentialHandler;
+class PersonalAccessTokenCredentialHandler {
+    constructor(token) {
+        this.token = token;
+    }
+    // currently implements pre-authorization
+    // TODO: support preAuth = false where it hooks on 401
+    prepareRequest(options) {
+        options.headers['Authorization'] =
+            'Basic ' + Buffer.from('PAT:' + this.token).toString('base64');
+    }
+    // This handler cannot handle 401
+    canHandleAuthentication(response) {
+        return false;
+    }
+    handleAuthentication(httpClient, requestInfo, objs) {
+        return null;
+    }
+}
+exports.PersonalAccessTokenCredentialHandler = PersonalAccessTokenCredentialHandler;
 
 
 /***/ }),
@@ -7793,12 +7879,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
+exports.getIDToken = exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.notice = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
 const command_1 = __webpack_require__(431);
 const file_command_1 = __webpack_require__(102);
 const utils_1 = __webpack_require__(82);
 const os = __importStar(__webpack_require__(87));
 const path = __importStar(__webpack_require__(622));
+const oidc_utils_1 = __webpack_require__(742);
 /**
  * The code to exit an action
  */
@@ -7971,19 +8058,30 @@ exports.debug = debug;
 /**
  * Adds an error issue
  * @param message error issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function error(message) {
-    command_1.issue('error', message instanceof Error ? message.toString() : message);
+function error(message, properties = {}) {
+    command_1.issueCommand('error', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.error = error;
 /**
- * Adds an warning issue
+ * Adds a warning issue
  * @param message warning issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
  */
-function warning(message) {
-    command_1.issue('warning', message instanceof Error ? message.toString() : message);
+function warning(message, properties = {}) {
+    command_1.issueCommand('warning', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 exports.warning = warning;
+/**
+ * Adds a notice issue
+ * @param message notice issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function notice(message, properties = {}) {
+    command_1.issueCommand('notice', utils_1.toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+exports.notice = notice;
 /**
  * Writes info to log with console.log.
  * @param message info message
@@ -8056,6 +8154,12 @@ function getState(name) {
     return process.env[`STATE_${name}`] || '';
 }
 exports.getState = getState;
+function getIDToken(aud) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return yield oidc_utils_1.OidcClient.getIDToken(aud);
+    });
+}
+exports.getIDToken = getIDToken;
 //# sourceMappingURL=core.js.map
 
 /***/ }),
@@ -9652,7 +9756,7 @@ const exec_1 = __webpack_require__(986);
 async function cabalConfig() {
     let out = Buffer.from('');
     const append = (b) => (out = Buffer.concat([out, b]));
-    await exec_1.exec('cabal', ['--help'], {
+    await (0, exec_1.exec)('cabal', ['--help'], {
         silent: true,
         listeners: { stdout: append, stderr: append }
     });
@@ -9662,17 +9766,17 @@ async function run(inputs) {
     try {
         core.info('Preparing to setup a Haskell environment');
         const os = process.platform;
-        const opts = opts_1.getOpts(opts_1.getDefaults(os), os, inputs);
+        const opts = (0, opts_1.getOpts)((0, opts_1.getDefaults)(os), os, inputs);
         for (const [t, { resolved }] of Object.entries(opts).filter(o => o[1].enable)) {
-            await core.group(`Preparing ${t} environment`, async () => installer_1.resetTool(t, resolved, os));
-            await core.group(`Installing ${t} version ${resolved}`, async () => installer_1.installTool(t, resolved, os));
+            await core.group(`Preparing ${t} environment`, async () => (0, installer_1.resetTool)(t, resolved, os));
+            await core.group(`Installing ${t} version ${resolved}`, async () => (0, installer_1.installTool)(t, resolved, os));
         }
         if (opts.stack.setup)
-            await core.group('Pre-installing GHC with stack', async () => exec_1.exec('stack', ['setup', opts.ghc.resolved]));
+            await core.group('Pre-installing GHC with stack', async () => (0, exec_1.exec)('stack', ['setup', opts.ghc.resolved]));
         if (opts.cabal.enable)
             await core.group('Setting up cabal', async () => {
                 // Create config only if it doesn't exist.
-                await exec_1.exec('cabal', ['user-config', 'init'], {
+                await (0, exec_1.exec)('cabal', ['user-config', 'init'], {
                     silent: true,
                     ignoreReturnCode: true
                 });
@@ -9695,7 +9799,7 @@ async function run(inputs) {
                     // await exec('cabal user-config update');
                 }
                 if (!opts.stack.enable)
-                    await exec_1.exec('cabal update');
+                    await (0, exec_1.exec)('cabal update');
             });
         core.info(`##[add-matcher]${path.join(__dirname, '..', 'matcher.json')}`);
     }
@@ -9703,10 +9807,10 @@ async function run(inputs) {
         if (core.isDebug()) {
             // we don't fail here so that the error path can be tested in CI
             core.setOutput('failed', true);
-            core.debug(error.message);
+            core.debug(error instanceof Error ? error.message : `${error}`);
         }
         else {
-            core.setFailed(error.message);
+            core.setFailed(error instanceof Error ? error.message : `${error}`);
         }
     }
 }
@@ -10262,6 +10366,90 @@ function hashFiles(globber) {
 }
 exports.hashFiles = hashFiles;
 //# sourceMappingURL=internal-hash-files.js.map
+
+/***/ }),
+
+/***/ 742:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OidcClient = void 0;
+const http_client_1 = __webpack_require__(539);
+const auth_1 = __webpack_require__(226);
+const core_1 = __webpack_require__(470);
+class OidcClient {
+    static createHttpClient(allowRetry = true, maxRetry = 10) {
+        const requestOptions = {
+            allowRetries: allowRetry,
+            maxRetries: maxRetry
+        };
+        return new http_client_1.HttpClient('actions/oidc-client', [new auth_1.BearerCredentialHandler(OidcClient.getRequestToken())], requestOptions);
+    }
+    static getRequestToken() {
+        const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN'];
+        if (!token) {
+            throw new Error('Unable to get ACTIONS_ID_TOKEN_REQUEST_TOKEN env variable');
+        }
+        return token;
+    }
+    static getIDTokenUrl() {
+        const runtimeUrl = process.env['ACTIONS_ID_TOKEN_REQUEST_URL'];
+        if (!runtimeUrl) {
+            throw new Error('Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable');
+        }
+        return runtimeUrl;
+    }
+    static getCall(id_token_url) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+            const httpclient = OidcClient.createHttpClient();
+            const res = yield httpclient
+                .getJson(id_token_url)
+                .catch(error => {
+                throw new Error(`Failed to get ID Token. \n 
+        Error Code : ${error.statusCode}\n 
+        Error Message: ${error.result.message}`);
+            });
+            const id_token = (_a = res.result) === null || _a === void 0 ? void 0 : _a.value;
+            if (!id_token) {
+                throw new Error('Response json body do not have ID Token field');
+            }
+            return id_token;
+        });
+    }
+    static getIDToken(audience) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                // New ID Token is requested from action service
+                let id_token_url = OidcClient.getIDTokenUrl();
+                if (audience) {
+                    const encodedAudience = encodeURIComponent(audience);
+                    id_token_url = `${id_token_url}&audience=${encodedAudience}`;
+                }
+                core_1.debug(`ID token url is ${id_token_url}`);
+                const id_token = yield OidcClient.getCall(id_token_url);
+                core_1.setSecret(id_token);
+                return id_token;
+            }
+            catch (error) {
+                throw new Error(`Error message: ${error.message}`);
+            }
+        });
+    }
+}
+exports.OidcClient = OidcClient;
+//# sourceMappingURL=oidc-utils.js.map
 
 /***/ }),
 
@@ -11730,15 +11918,16 @@ const opts_1 = __webpack_require__(54);
 const process_1 = __importDefault(__webpack_require__(765));
 const glob = __importStar(__webpack_require__(281));
 const fs = __importStar(__webpack_require__(747));
+const crypto = __importStar(__webpack_require__(417));
 // Don't throw on non-zero.
-const exec = async (cmd, args) => exec_1.exec(cmd, args, { ignoreReturnCode: true });
+const exec = async (cmd, args) => (0, exec_1.exec)(cmd, args, { ignoreReturnCode: true });
 function failed(tool, version) {
     throw new Error(`All install methods for ${tool} ${version} failed`);
 }
 async function configureOutputs(tool, path, os) {
     var _a;
     core.setOutput(`${tool}-path`, path);
-    core.setOutput(`${tool}-exe`, await io_1.which(tool));
+    core.setOutput(`${tool}-exe`, await (0, io_1.which)(tool));
     if (tool == 'stack') {
         const sr = (_a = process_1.default.env['STACK_ROOT']) !== null && _a !== void 0 ? _a : (os === 'win32' ? 'C:\\sr' : `${process_1.default.env.HOME}/.stack`);
         core.setOutput('stack-root', sr);
@@ -11905,7 +12094,8 @@ async function apt(tool, version) {
 async function choco(tool, version) {
     core.info(`Attempting to install ${tool} ${version} using chocolatey`);
     // Choco tries to invoke `add-path` command on earlier versions of ghc, which has been deprecated and fails the step, so disable command execution during this.
-    console.log('::stop-commands::SetupHaskellStopCommands');
+    const token = crypto.randomBytes(32).toString('hex');
+    console.log(`::stop-commands::${token}`);
     const args = [
         'choco',
         'install',
@@ -11918,7 +12108,7 @@ async function choco(tool, version) {
     ];
     if ((await exec('powershell', args)) !== 0)
         await exec('powershell', [...args, '--pre']);
-    console.log('::SetupHaskellStopCommands::'); // Re-enable command execution
+    console.log(`::${token}::`); // Re-enable command execution
     // Add GHC to path automatically because it does not add until the end of the step and we check the path.
     const chocoPath = await getChocoPath(tool, version);
     if (tool == 'ghc')
@@ -11927,10 +12117,10 @@ async function choco(tool, version) {
 async function ghcupBin(os) {
     const cachedBin = tc.find('ghcup', opts_1.ghcup_version);
     if (cachedBin)
-        return path_1.join(cachedBin, 'ghcup');
+        return (0, path_1.join)(cachedBin, 'ghcup');
     const bin = await tc.downloadTool(`https://downloads.haskell.org/ghcup/${opts_1.ghcup_version}/x86_64-${os === 'darwin' ? 'apple-darwin' : 'linux'}-ghcup-${opts_1.ghcup_version}`);
     await fs_1.promises.chmod(bin, 0o755);
-    return path_1.join(await tc.cacheFile(bin, 'ghcup', 'ghcup', opts_1.ghcup_version), 'ghcup');
+    return (0, path_1.join)(await tc.cacheFile(bin, 'ghcup', 'ghcup', opts_1.ghcup_version), 'ghcup');
 }
 async function ghcup(tool, version, os) {
     core.info(`Attempting to install ${tool} ${version} using ghcup`);
@@ -11956,17 +12146,17 @@ async function getChocoPath(tool, version) {
     var _a;
     // Environment variable 'ChocolateyToolsLocation' will be added to Hosted images soon
     // fallback to C:\\tools for now until variable is available
-    const chocoToolsLocation = (_a = process_1.default.env.ChocolateyToolsLocation) !== null && _a !== void 0 ? _a : path_1.join(`${process_1.default.env.SystemDrive}`, 'tools');
+    const chocoToolsLocation = (_a = process_1.default.env.ChocolateyToolsLocation) !== null && _a !== void 0 ? _a : (0, path_1.join)(`${process_1.default.env.SystemDrive}`, 'tools');
     // choco packages GHC 9.x are installed on different path (C:\\tools\ghc-9.0.1)
-    let chocoToolPath = path_1.join(chocoToolsLocation, `${tool}-${version}`);
+    let chocoToolPath = (0, path_1.join)(chocoToolsLocation, `${tool}-${version}`);
     // choco packages GHC < 9.x
     if (!fs.existsSync(chocoToolPath)) {
-        chocoToolPath = path_1.join(`${process_1.default.env.ChocolateyInstall}`, 'lib', `${tool}.${version}`);
+        chocoToolPath = (0, path_1.join)(`${process_1.default.env.ChocolateyInstall}`, 'lib', `${tool}.${version}`);
     }
     const pattern = `${chocoToolPath}/**/${tool}.exe`;
     const globber = await glob.create(pattern);
     for await (const file of globber.globGenerator()) {
-        return path_1.dirname(file);
+        return (0, path_1.dirname)(file);
     }
     return '<not-found>';
 }

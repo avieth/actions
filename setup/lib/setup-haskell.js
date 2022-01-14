@@ -29,7 +29,7 @@ const exec_1 = require("@actions/exec");
 async function cabalConfig() {
     let out = Buffer.from('');
     const append = (b) => (out = Buffer.concat([out, b]));
-    await exec_1.exec('cabal', ['--help'], {
+    await (0, exec_1.exec)('cabal', ['--help'], {
         silent: true,
         listeners: { stdout: append, stderr: append }
     });
@@ -39,17 +39,17 @@ async function run(inputs) {
     try {
         core.info('Preparing to setup a Haskell environment');
         const os = process.platform;
-        const opts = opts_1.getOpts(opts_1.getDefaults(os), os, inputs);
+        const opts = (0, opts_1.getOpts)((0, opts_1.getDefaults)(os), os, inputs);
         for (const [t, { resolved }] of Object.entries(opts).filter(o => o[1].enable)) {
-            await core.group(`Preparing ${t} environment`, async () => installer_1.resetTool(t, resolved, os));
-            await core.group(`Installing ${t} version ${resolved}`, async () => installer_1.installTool(t, resolved, os));
+            await core.group(`Preparing ${t} environment`, async () => (0, installer_1.resetTool)(t, resolved, os));
+            await core.group(`Installing ${t} version ${resolved}`, async () => (0, installer_1.installTool)(t, resolved, os));
         }
         if (opts.stack.setup)
-            await core.group('Pre-installing GHC with stack', async () => exec_1.exec('stack', ['setup', opts.ghc.resolved]));
+            await core.group('Pre-installing GHC with stack', async () => (0, exec_1.exec)('stack', ['setup', opts.ghc.resolved]));
         if (opts.cabal.enable)
             await core.group('Setting up cabal', async () => {
                 // Create config only if it doesn't exist.
-                await exec_1.exec('cabal', ['user-config', 'init'], {
+                await (0, exec_1.exec)('cabal', ['user-config', 'init'], {
                     silent: true,
                     ignoreReturnCode: true
                 });
@@ -72,7 +72,7 @@ async function run(inputs) {
                     // await exec('cabal user-config update');
                 }
                 if (!opts.stack.enable)
-                    await exec_1.exec('cabal update');
+                    await (0, exec_1.exec)('cabal update');
             });
         core.info(`##[add-matcher]${path.join(__dirname, '..', 'matcher.json')}`);
     }
@@ -80,10 +80,10 @@ async function run(inputs) {
         if (core.isDebug()) {
             // we don't fail here so that the error path can be tested in CI
             core.setOutput('failed', true);
-            core.debug(error.message);
+            core.debug(error instanceof Error ? error.message : `${error}`);
         }
         else {
-            core.setFailed(error.message);
+            core.setFailed(error instanceof Error ? error.message : `${error}`);
         }
     }
 }
