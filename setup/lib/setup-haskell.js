@@ -25,11 +25,10 @@ const path = __importStar(require("path"));
 const os_1 = require("os");
 const opts_1 = require("./opts");
 const installer_1 = require("./installer");
-const exec_1 = require("@actions/exec");
 async function cabalConfig() {
     let out = Buffer.from('');
     const append = (b) => (out = Buffer.concat([out, b]));
-    await (0, exec_1.exec)('cabal', ['--help'], {
+    await (0, installer_1.exec)('cabal', ['--help'], {
         silent: true,
         listeners: { stdout: append, stderr: append }
     });
@@ -45,11 +44,11 @@ async function run(inputs) {
             await core.group(`Installing ${t} version ${resolved}`, async () => (0, installer_1.installTool)(t, resolved, os));
         }
         if (opts.stack.setup)
-            await core.group('Pre-installing GHC with stack', async () => (0, exec_1.exec)('stack', ['setup', opts.ghc.resolved]));
+            await core.group('Pre-installing GHC with stack', async () => (0, installer_1.exec)('stack', ['setup', opts.ghc.resolved]));
         if (opts.cabal.enable)
             await core.group('Setting up cabal', async () => {
                 // Create config only if it doesn't exist.
-                await (0, exec_1.exec)('cabal', ['user-config', 'init'], {
+                await (0, installer_1.exec)('cabal', ['user-config', 'init'], {
                     silent: true,
                     ignoreReturnCode: true
                 });
@@ -72,7 +71,7 @@ async function run(inputs) {
                     // await exec('cabal user-config update');
                 }
                 if (!opts.stack.enable)
-                    await (0, exec_1.exec)('cabal update');
+                    await (0, installer_1.exec)('cabal update');
             });
         core.info(`##[add-matcher]${path.join(__dirname, '..', 'matcher.json')}`);
     }

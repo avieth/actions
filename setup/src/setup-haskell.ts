@@ -3,9 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {EOL} from 'os';
 import {getOpts, getDefaults, Tool} from './opts';
-import {installTool, resetTool} from './installer';
+import {installTool, resetTool, exec} from './installer';
 import type {OS} from './opts';
-import {exec} from '@actions/exec';
 
 async function cabalConfig(): Promise<string> {
   let out = Buffer.from('');

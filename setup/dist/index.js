@@ -9752,11 +9752,10 @@ const path = __importStar(__webpack_require__(622));
 const os_1 = __webpack_require__(87);
 const opts_1 = __webpack_require__(54);
 const installer_1 = __webpack_require__(923);
-const exec_1 = __webpack_require__(986);
 async function cabalConfig() {
     let out = Buffer.from('');
     const append = (b) => (out = Buffer.concat([out, b]));
-    await (0, exec_1.exec)('cabal', ['--help'], {
+    await (0, installer_1.exec)('cabal', ['--help'], {
         silent: true,
         listeners: { stdout: append, stderr: append }
     });
@@ -9772,11 +9771,11 @@ async function run(inputs) {
             await core.group(`Installing ${t} version ${resolved}`, async () => (0, installer_1.installTool)(t, resolved, os));
         }
         if (opts.stack.setup)
-            await core.group('Pre-installing GHC with stack', async () => (0, exec_1.exec)('stack', ['setup', opts.ghc.resolved]));
+            await core.group('Pre-installing GHC with stack', async () => (0, installer_1.exec)('stack', ['setup', opts.ghc.resolved]));
         if (opts.cabal.enable)
             await core.group('Setting up cabal', async () => {
                 // Create config only if it doesn't exist.
-                await (0, exec_1.exec)('cabal', ['user-config', 'init'], {
+                await (0, installer_1.exec)('cabal', ['user-config', 'init'], {
                     silent: true,
                     ignoreReturnCode: true
                 });
@@ -9799,7 +9798,7 @@ async function run(inputs) {
                     // await exec('cabal user-config update');
                 }
                 if (!opts.stack.enable)
-                    await (0, exec_1.exec)('cabal update');
+                    await (0, installer_1.exec)('cabal update');
             });
         core.info(`##[add-matcher]${path.join(__dirname, '..', 'matcher.json')}`);
     }
@@ -11907,7 +11906,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetTool = exports.installTool = void 0;
+exports.resetTool = exports.installTool = exports.exec = void 0;
 const core = __importStar(__webpack_require__(470));
 const exec_1 = __webpack_require__(986);
 const io_1 = __webpack_require__(1);
@@ -11920,7 +11919,15 @@ const glob = __importStar(__webpack_require__(281));
 const fs = __importStar(__webpack_require__(747));
 const crypto = __importStar(__webpack_require__(417));
 // Don't throw on non-zero.
-const exec = async (cmd, args) => (0, exec_1.exec)(cmd, args, { ignoreReturnCode: true });
+// Additionally, stop all command execution when running untrusted binaries
+const exec = async (cmd, args, opts) => {
+    const token = crypto.randomBytes(32).toString('hex');
+    console.log(`::stop-commands::${token}`);
+    const rc = await (0, exec_1.exec)(cmd, args, { ignoreReturnCode: true, ...opts });
+    console.log(`::${token}::`);
+    return rc;
+};
+exports.exec = exec;
 function failed(tool, version) {
     throw new Error(`All install methods for ${tool} ${version} failed`);
 }
@@ -11989,7 +11996,7 @@ async function isInstalled(tool, version, os) {
             // Make sure that the correct ghc is used, even if ghcup has set a
             // default prior to this action being ran.
             if (tool === 'ghc' && installedPath === ghcupPath)
-                await exec(await ghcupBin(os), ['set', tool, version]);
+                await (0, exports.exec)(await ghcupBin(os), ['set', tool, version]);
             return success(tool, version, installedPath, os);
         }
     }
@@ -11999,7 +12006,7 @@ async function isInstalled(tool, version, os) {
             .then(() => ghcupPath)
             .catch(() => undefined);
         if (installedPath) {
-            await exec(await ghcupBin(os), ['set', tool, version]);
+            await (0, exports.exec)(await ghcupBin(os), ['set', tool, version]);
             return success(tool, version, installedPath, os);
         }
     }
@@ -12051,11 +12058,11 @@ async function resetTool(tool, _version, os) {
     switch (os) {
         case 'linux':
             bin = await ghcupBin(os);
-            await exec(bin, ['unset', tool]);
+            await (0, exports.exec)(bin, ['unset', tool]);
             return;
         case 'darwin':
             bin = await ghcupBin(os);
-            await exec(bin, ['unset', tool]);
+            await (0, exports.exec)(bin, ['unset', tool]);
             return;
         case 'win32':
             // We don't need to do anything here... yet
@@ -12081,7 +12088,7 @@ async function stack(version, os) {
 }
 async function aptBuildEssential() {
     core.info(`Installing build-essential using apt-get (for ghc-head)`);
-    const returnCode = await exec(`sudo -- sh -c "apt-get update && apt-get -y install build-essential"`);
+    const returnCode = await (0, exports.exec)(`sudo -- sh -c "apt-get update && apt-get -y install build-essential"`);
     return returnCode === 0;
 }
 async function apt(tool, version) {
@@ -12089,13 +12096,10 @@ async function apt(tool, version) {
     const v = aptVersion(tool, version);
     core.info(`Attempting to install ${toolName} ${v} using apt-get`);
     // Ignore the return code so we can fall back to ghcup
-    await exec(`sudo -- sh -c "add-apt-repository -y ppa:hvr/ghc && apt-get update && apt-get -y install ${toolName}-${v}"`);
+    await (0, exports.exec)(`sudo -- sh -c "add-apt-repository -y ppa:hvr/ghc && apt-get update && apt-get -y install ${toolName}-${v}"`);
 }
 async function choco(tool, version) {
     core.info(`Attempting to install ${tool} ${version} using chocolatey`);
-    // Choco tries to invoke `add-path` command on earlier versions of ghc, which has been deprecated and fails the step, so disable command execution during this.
-    const token = crypto.randomBytes(32).toString('hex');
-    console.log(`::stop-commands::${token}`);
     const args = [
         'choco',
         'install',
@@ -12106,9 +12110,8 @@ async function choco(tool, version) {
         '--no-progress',
         '-r'
     ];
-    if ((await exec('powershell', args)) !== 0)
-        await exec('powershell', [...args, '--pre']);
-    console.log(`::${token}::`); // Re-enable command execution
+    if ((await (0, exports.exec)('powershell', args)) !== 0)
+        await (0, exports.exec)('powershell', [...args, '--pre']);
     // Add GHC to path automatically because it does not add until the end of the step and we check the path.
     const chocoPath = await getChocoPath(tool, version);
     if (tool == 'ghc')
@@ -12125,14 +12128,14 @@ async function ghcupBin(os) {
 async function ghcup(tool, version, os) {
     core.info(`Attempting to install ${tool} ${version} using ghcup`);
     const bin = await ghcupBin(os);
-    const returnCode = await exec(bin, ['install', tool, version]);
+    const returnCode = await (0, exports.exec)(bin, ['install', tool, version]);
     if (returnCode === 0)
-        await exec(bin, ['set', tool, version]);
+        await (0, exports.exec)(bin, ['set', tool, version]);
 }
 async function ghcupGHCHead() {
     core.info(`Attempting to install ghc head using ghcup`);
     const bin = await ghcupBin('linux');
-    const returnCode = await exec(bin, [
+    const returnCode = await (0, exports.exec)(bin, [
         'install',
         'ghc',
         '-u',
@@ -12140,7 +12143,7 @@ async function ghcupGHCHead() {
         'head'
     ]);
     if (returnCode === 0)
-        await exec(bin, ['set', 'ghc', 'head']);
+        await (0, exports.exec)(bin, ['set', 'ghc', 'head']);
 }
 async function getChocoPath(tool, version) {
     var _a;

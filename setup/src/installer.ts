@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import {exec as e} from '@actions/exec';
+import {exec as e, ExecOptions} from '@actions/exec';
 import {which} from '@actions/io';
 import * as tc from '@actions/tool-cache';
 import {promises as afs} from 'fs';
@@ -11,8 +11,18 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 
 // Don't throw on non-zero.
-const exec = async (cmd: string, args?: string[]): Promise<number> =>
-  e(cmd, args, {ignoreReturnCode: true});
+// Additionally, stop all command execution when running untrusted binaries
+export const exec = async (
+  cmd: string,
+  args?: string[],
+  opts?: ExecOptions
+): Promise<number> => {
+  const token = crypto.randomBytes(32).toString('hex');
+  console.log(`::stop-commands::${token}`);
+  const rc = await e(cmd, args, {ignoreReturnCode: true, ...opts});
+  console.log(`::${token}::`);
+  return rc;
+};
 
 function failed(tool: Tool, version: string): void {
   throw new Error(`All install methods for ${tool} ${version} failed`);
@@ -237,9 +247,6 @@ async function apt(tool: Tool, version: string): Promise<void> {
 
 async function choco(tool: Tool, version: string): Promise<void> {
   core.info(`Attempting to install ${tool} ${version} using chocolatey`);
-  // Choco tries to invoke `add-path` command on earlier versions of ghc, which has been deprecated and fails the step, so disable command execution during this.
-  const token = crypto.randomBytes(32).toString('hex');
-  console.log(`::stop-commands::${token}`);
   const args = [
     'choco',
     'install',
@@ -252,9 +259,8 @@ async function choco(tool: Tool, version: string): Promise<void> {
   ];
   if ((await exec('powershell', args)) !== 0)
     await exec('powershell', [...args, '--pre']);
-  console.log(`::${token}::`); // Re-enable command execution
-  // Add GHC to path automatically because it does not add until the end of the step and we check the path.
 
+  // Add GHC to path automatically because it does not add until the end of the step and we check the path.
   const chocoPath = await getChocoPath(tool, version);
 
   if (tool == 'ghc') core.addPath(chocoPath);
