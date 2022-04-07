@@ -80,9 +80,9 @@ export default async function run(
     if (core.isDebug()) {
       // we don't fail here so that the error path can be tested in CI
       core.setOutput('failed', true);
-      core.debug(error.message);
+      core.debug(error instanceof Error ? error.message : `${error}`);
     } else {
-      core.setFailed(error.message);
+      core.setFailed(error instanceof Error ? error.message : `${error}`);
     }
   }
 }
