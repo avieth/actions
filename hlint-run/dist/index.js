@@ -368,13 +368,15 @@ function parseCheckMode(arg) {
 const INPUT_KEY_HLINT_BIN = 'hlint-bin';
 const INPUT_KEY_HLINT_FILES = 'path';
 const INPUT_KEY_HLINT_FAIL_MODE = 'fail-on';
+const INPUT_KEY_JSON_FILE = 'json-file';
 function getInputs() {
     const hlintCmd = core.getInput(INPUT_KEY_HLINT_BIN, { required: false }) || 'hlint';
     const pathList = parseStringOrJsonArray(core.getInput(INPUT_KEY_HLINT_FILES, { required: false }) || '.');
     const failOn = parseCheckMode(core.getInput(INPUT_KEY_HLINT_FAIL_MODE, { required: false }) || 'NEVER');
+    const jsonFile = core.getInput(INPUT_KEY_JSON_FILE, { required: false });
     // NOTE: Because ncc compiles all the files, take care that __dirname represents the dist/ folder.
     const baseDir = path.join(__dirname, '..');
-    return { baseDir, hlintCmd, pathList, failOn };
+    return { baseDir, hlintCmd, jsonFile, pathList, failOn };
 }
 exports.default = getInputs;
 
@@ -467,6 +469,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(186));
 const path = __importStar(__nccwpck_require__(622));
+const fs = __importStar(__nccwpck_require__(747));
 const hlint_1 = __nccwpck_require__(490);
 const bufferedExec_1 = __importDefault(__nccwpck_require__(671));
 const withMatcherAtPath_1 = __importDefault(__nccwpck_require__(673));
@@ -479,6 +482,34 @@ function runHLint(cmd, args) {
         core.info(`hlint completed with status code ${statusCode}`);
         const ideas = JSON.parse(hlintOutputStr);
         ideas.map(hlint_1.serializeProblem).forEach(line => console.log(line));
+        return { ideas, statusCode };
+    });
+}
+function readHLintFile(path) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const fileContents = yield fs.promises.readFile(path, 'utf8');
+        const hints = JSON.parse(fileContents);
+        hints.forEach(hint => {
+            const message = hint.to
+                ? `-- Found:\n${hint.from}\n-- Perhaps:\n${hint.to}`
+                : `-- Remove:\n${hint.from}`;
+            const properties = {
+                endColumn: hint.endColumn,
+                endLine: hint.endLine,
+                file: hint.file,
+                startColumn: hint.startColumn,
+                startLine: hint.startLine,
+                title: `${hint.severity}: ${hint.hint}`,
+            };
+            if (hint.severity == "Error") {
+                core.error(message, properties);
+            }
+            else {
+                core.warning(message, properties);
+            }
+        });
+        const ideas = hints;
+        const statusCode = ideas.length;
         return { ideas, statusCode };
     });
 }
@@ -505,13 +536,20 @@ function getOverallCheckResult(failOn, { ideas, statusCode }) {
     }
     return { ok, hintSummary };
 }
-function run({ baseDir, hlintCmd, pathList, failOn }) {
+function run({ baseDir, hlintCmd, jsonFile, pathList, failOn }) {
     return __awaiter(this, void 0, void 0, function* () {
-        const hlintArgs = ['-j', '--json', '--', ...pathList];
-        const matcherDefPath = path.join(baseDir, hlint_1.MATCHER_DEF_PATH);
-        const { ideas, statusCode } = yield (0, withMatcherAtPath_1.default)(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
-        const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
-        return { ok, statusCode, ideas, hintSummary };
+        if (jsonFile) {
+            const { ideas, statusCode } = yield readHLintFile(jsonFile);
+            const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
+            return { ok, statusCode, ideas, hintSummary };
+        }
+        else {
+            const hlintArgs = ['-j', '--json', '--', ...pathList];
+            const matcherDefPath = path.join(baseDir, hlint_1.MATCHER_DEF_PATH);
+            const { ideas, statusCode } = yield (0, withMatcherAtPath_1.default)(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
+            const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
+            return { ok, statusCode, ideas, hintSummary };
+        }
     });
 }
 exports.default = run;

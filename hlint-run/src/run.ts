@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as path from 'path'
+import * as fs from 'fs'
 import {
   Idea as HLintIdea,
   Severity as HLintSeverity,
@@ -15,6 +16,7 @@ export type CheckMode = HLintSeverity | 'STATUS' | 'NEVER';
 export interface RunArgs {
   baseDir: string,
   hlintCmd: string,
+  jsonFile: string,
   pathList: string[],
   failOn: CheckMode,
 };
@@ -42,6 +44,32 @@ async function runHLint(cmd: string, args: string[]): Promise<HLintResult> {
   return {ideas, statusCode};
 }
 
+async function readHLintFile(path: string): Promise<HLintResult> {
+  const fileContents = await fs.promises.readFile(path, 'utf8');
+  const hints: HLintIdea[] = JSON.parse(fileContents);
+  hints.forEach(hint => {
+    const message = hint.to
+      ? `-- Found:\n${hint.from}\n-- Perhaps:\n${hint.to}`
+      : `-- Remove:\n${hint.from}`;
+    const properties = {
+      endColumn: hint.endColumn,
+      endLine: hint.endLine,
+      file: hint.file,
+      startColumn: hint.startColumn,
+      startLine: hint.startLine,
+      title: `${hint.severity}: ${hint.hint}`,
+    };
+    if (hint.severity == "Error") {
+      core.error(message, properties);
+    } else {
+      core.warning(message, properties);
+    }
+  });
+  const ideas = hints;
+  const statusCode = ideas.length;
+  return {ideas, statusCode};
+}
+
 function getOverallCheckResult(failOn: CheckMode, {ideas, statusCode}: HLintResult): CheckResult {
   const hintsBySev = HLINT_SEV_LEVELS.map(sev => ([sev, ideas.filter(hint => hint.severity === sev).length]));
   const hintSummary = hintsBySev
@@ -66,10 +94,16 @@ function getOverallCheckResult(failOn: CheckMode, {ideas, statusCode}: HLintResu
   return {ok, hintSummary}
 }
 
-export default async function run({baseDir, hlintCmd, pathList, failOn}: RunArgs): Promise<RunResult> {
-  const hlintArgs = ['-j', '--json', '--', ...pathList]
-  const matcherDefPath = path.join(baseDir, MATCHER_DEF_PATH);
-  const {ideas, statusCode} = await withMatcherAtPath(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
-  const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
-  return {ok, statusCode, ideas, hintSummary};
+export default async function run({baseDir, hlintCmd, jsonFile, pathList, failOn}: RunArgs): Promise<RunResult> {
+  if (jsonFile) {
+    const {ideas, statusCode} = await readHLintFile(jsonFile);
+    const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
+    return {ok, statusCode, ideas, hintSummary};
+  } else {
+    const hlintArgs = ['-j', '--json', '--', ...pathList]
+    const matcherDefPath = path.join(baseDir, MATCHER_DEF_PATH);
+    const {ideas, statusCode} = await withMatcherAtPath(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
+    const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
+    return {ok, statusCode, ideas, hintSummary};
+  }
 }
