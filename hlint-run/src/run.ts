@@ -45,27 +45,9 @@ async function runHLint(cmd: string, args: string[]): Promise<HLintResult> {
 }
 
 async function readHLintFile(path: string): Promise<HLintResult> {
+  core.info(`Reading hints from ${path}`);
   const fileContents = await fs.promises.readFile(path, 'utf8');
-  const hints: HLintIdea[] = JSON.parse(fileContents);
-  hints.forEach(hint => {
-    const message = hint.to
-      ? `-- Found:\n${hint.from}\n-- Perhaps:\n${hint.to}`
-      : `-- Remove:\n${hint.from}`;
-    const properties = {
-      endColumn: hint.endColumn,
-      endLine: hint.endLine,
-      file: hint.file,
-      startColumn: hint.startColumn,
-      startLine: hint.startLine,
-      title: `${hint.severity}: ${hint.hint}`,
-    };
-    if (hint.severity == "Error") {
-      core.error(message, properties);
-    } else {
-      core.warning(message, properties);
-    }
-  });
-  const ideas = hints;
+  const ideas: HLintIdea[] = JSON.parse(fileContents);
   const statusCode = ideas.length;
   return {ideas, statusCode};
 }
@@ -95,15 +77,10 @@ function getOverallCheckResult(failOn: CheckMode, {ideas, statusCode}: HLintResu
 }
 
 export default async function run({baseDir, hlintCmd, jsonFile, pathList, failOn}: RunArgs): Promise<RunResult> {
-  if (jsonFile) {
-    const {ideas, statusCode} = await readHLintFile(jsonFile);
-    const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
-    return {ok, statusCode, ideas, hintSummary};
-  } else {
-    const hlintArgs = ['-j', '--json', '--', ...pathList]
-    const matcherDefPath = path.join(baseDir, MATCHER_DEF_PATH);
-    const {ideas, statusCode} = await withMatcherAtPath(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
-    const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
-    return {ok, statusCode, ideas, hintSummary};
-  }
+  const hlintArgs = ['-j', '--json', '--', ...pathList];
+  const action = jsonFile.length > 0 ? () => readHLintFile(jsonFile) : () => runHLint(hlintCmd, hlintArgs);
+  const matcherDefPath = path.join(baseDir, MATCHER_DEF_PATH);
+  const {ideas, statusCode} = await withMatcherAtPath(matcherDefPath, action);
+  const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
+  return {ok, statusCode, ideas, hintSummary}
 }

@@ -51,28 +51,9 @@ function runHLint(cmd, args) {
 }
 function readHLintFile(path) {
     return __awaiter(this, void 0, void 0, function* () {
+        core.info(`Reading hints from ${path}`);
         const fileContents = yield fs.promises.readFile(path, 'utf8');
-        const hints = JSON.parse(fileContents);
-        hints.forEach(hint => {
-            const message = hint.to
-                ? `-- Found:\n${hint.from}\n-- Perhaps:\n${hint.to}`
-                : `-- Remove:\n${hint.from}`;
-            const properties = {
-                endColumn: hint.endColumn,
-                endLine: hint.endLine,
-                file: hint.file,
-                startColumn: hint.startColumn,
-                startLine: hint.startLine,
-                title: `${hint.severity}: ${hint.hint}`,
-            };
-            if (hint.severity == "Error") {
-                core.error(message, properties);
-            }
-            else {
-                core.warning(message, properties);
-            }
-        });
-        const ideas = hints;
+        const ideas = JSON.parse(fileContents);
         const statusCode = ideas.length;
         return { ideas, statusCode };
     });
@@ -102,18 +83,12 @@ function getOverallCheckResult(failOn, { ideas, statusCode }) {
 }
 function run({ baseDir, hlintCmd, jsonFile, pathList, failOn }) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (jsonFile) {
-            const { ideas, statusCode } = yield readHLintFile(jsonFile);
-            const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
-            return { ok, statusCode, ideas, hintSummary };
-        }
-        else {
-            const hlintArgs = ['-j', '--json', '--', ...pathList];
-            const matcherDefPath = path.join(baseDir, hlint_1.MATCHER_DEF_PATH);
-            const { ideas, statusCode } = yield (0, withMatcherAtPath_1.default)(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
-            const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
-            return { ok, statusCode, ideas, hintSummary };
-        }
+        const hlintArgs = ['-j', '--json', '--', ...pathList];
+        const action = jsonFile.length > 0 ? () => readHLintFile(jsonFile) : () => runHLint(hlintCmd, hlintArgs);
+        const matcherDefPath = path.join(baseDir, hlint_1.MATCHER_DEF_PATH);
+        const { ideas, statusCode } = yield (0, withMatcherAtPath_1.default)(matcherDefPath, action);
+        const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });
+        return { ok, statusCode, ideas, hintSummary };
     });
 }
 exports.default = run;
