@@ -51,10 +51,11 @@ async function readHLintFile(path: string): Promise<HLintResult> {
   const statusCode = ideas.length;
 
   ideas.forEach(idea => {
-    const log = idea.severity === 'Error' ? core.error : core.warning
-    const srcLoc = { ...idea, title: idea.hint}
-    const message = idea.hint
-    log(message, srcLoc);
+    const annotation = {...idea, title: idea.hint}
+    const message = idea.note.join(' ')
+    idea.severity === 'Error'
+      ? core.error(message, annotation)
+      : core.warning(message, annotation)
   })
 
   return {ideas, statusCode};
