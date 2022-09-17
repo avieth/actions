@@ -51,7 +51,7 @@ async function readHLintFile(path: string): Promise<HLintResult> {
   const statusCode = ideas.length;
 
   ideas.forEach(idea => {
-    const annotation = {...idea, title: idea.hint}
+    const annotation = {...idea, title: `${idea.severity}: ${idea.hint}`}
     const toFrom = idea.from
       ? [`(Found: ${idea.to})`, `(Perhaps: ${idea.from})`]
       : [`(Remove: ${idea.to})`]

@@ -56,7 +56,7 @@ function readHLintFile(path) {
         const ideas = JSON.parse(fileContents);
         const statusCode = ideas.length;
         ideas.forEach(idea => {
-            const annotation = Object.assign(Object.assign({}, idea), { title: idea.hint });
+            const annotation = Object.assign(Object.assign({}, idea), { title: `${idea.severity}: ${idea.hint}` });
             const toFrom = idea.from
                 ? [`(Found: ${idea.to})`, `(Perhaps: ${idea.from})`]
                 : [`(Remove: ${idea.to})`];
