@@ -493,7 +493,7 @@ function readHLintFile(path) {
             const fromTo = hint.to
                 ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]
                 : [`(Remove: ${hint.from})`];
-            const message = [...fromTo, ...hint.note].join(' ');
+            const message = [...fromTo, '\n', ...hint.note].join(' ');
             const properties = Object.assign(Object.assign({}, hint), { title: `${hint.severity}: ${hint.hint}` });
             if (hint.severity == "Error") {
                 core.error(message, properties);
