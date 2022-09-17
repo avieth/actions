@@ -49,9 +49,9 @@ async function readHLintFile(path: string): Promise<HLintResult> {
   const hints: HLintIdea[] = JSON.parse(fileContents);
   hints.forEach(hint => {
     const fromTo = hint.to
-      ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})\n`]
-      : [`(Remove: ${hint.from})\n`];
-    const message = [...fromTo, ...hint.note].join(' ');
+      ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]
+      : [`(Remove: ${hint.from})`];
+    const message = [...fromTo, ...hint.note].join('\n');
     const properties = {...hint, title: `${hint.severity}: ${hint.hint}`};
     if (hint.severity == "Error") {
       core.error(message, properties);
