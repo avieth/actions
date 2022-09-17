@@ -52,7 +52,10 @@ async function readHLintFile(path: string): Promise<HLintResult> {
 
   ideas.forEach(idea => {
     const annotation = {...idea, title: idea.hint}
-    const message = idea.note.join(' ')
+    const toFrom = idea.from
+      ? [`(Found: ${idea.to})`, `(Perhaps: ${idea.from})`]
+      : [`(Remove: ${idea.to})`]
+    const message = [...toFrom,...idea.note].join(' ')
     idea.severity === 'Error'
       ? core.error(message, annotation)
       : core.warning(message, annotation)
