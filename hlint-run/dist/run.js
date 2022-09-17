@@ -54,17 +54,11 @@ function readHLintFile(path) {
         const fileContents = yield fs.promises.readFile(path, 'utf8');
         const hints = JSON.parse(fileContents);
         hints.forEach(hint => {
-            const message = hint.to
-                ? `-- Found:\n${hint.from}\n-- Perhaps:\n${hint.to}`
-                : `-- Remove:\n${hint.from}`;
-            const properties = {
-                endColumn: hint.endColumn,
-                endLine: hint.endLine,
-                file: hint.file,
-                startColumn: hint.startColumn,
-                startLine: hint.startLine,
-                title: `${hint.severity}: ${hint.hint}`,
-            };
+            const fromTo = hint.to
+                ? `(Found: ${hint.from}) (Perhaps: ${hint.to})`
+                : `(Remove: ${hint.from})`;
+            const message = [...fromTo, ...hint.note].join(' ');
+            const properties = Object.assign(Object.assign({}, hint), { title: `${hint.severity}: ${hint.hint}` });
             if (hint.severity == "Error") {
                 core.error(message, properties);
             }
