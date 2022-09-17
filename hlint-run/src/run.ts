@@ -49,6 +49,14 @@ async function readHLintFile(path: string): Promise<HLintResult> {
   const fileContents = await fs.promises.readFile(path, 'utf8');
   const ideas: HLintIdea[] = JSON.parse(fileContents);
   const statusCode = ideas.length;
+
+  ideas.forEach(idea => {
+    const log = idea.severity === 'Error' ? core.error : core.warning
+    const srcLoc = { ...idea, title: idea.hint}
+    const message = idea.hint
+    log(message, srcLoc);
+  })
+
   return {ideas, statusCode};
 }
 
