@@ -470,6 +470,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(186));
 const path = __importStar(__nccwpck_require__(622));
 const fs = __importStar(__nccwpck_require__(747));
+const os = __importStar(__nccwpck_require__(87));
 const hlint_1 = __nccwpck_require__(490);
 const bufferedExec_1 = __importDefault(__nccwpck_require__(671));
 const withMatcherAtPath_1 = __importDefault(__nccwpck_require__(673));
@@ -488,7 +489,7 @@ function runHLint(cmd, args) {
 function readHLintFile(path) {
     return __awaiter(this, void 0, void 0, function* () {
         const fileContents = yield fs.promises.readFile(path, 'utf8');
-        const hints = JSON.parse(fileContents);
+        const hints = fileContents.split(os.EOL).flatMap(line => JSON.parse(line));
         hints.forEach(hint => {
             const fromTo = hint.to
                 ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]

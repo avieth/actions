@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import * as path from 'path'
 import * as fs from 'fs'
+import * as os from 'os'
 import {
   Idea as HLintIdea,
   Severity as HLintSeverity,
@@ -46,7 +47,7 @@ async function runHLint(cmd: string, args: string[]): Promise<HLintResult> {
 
 async function readHLintFile(path: string): Promise<HLintResult> {
   const fileContents = await fs.promises.readFile(path, 'utf8');
-  const hints: HLintIdea[] = JSON.parse(fileContents);
+  const hints: Array<HLintIdea> = fileContents.split(os.EOL).flatMap(line => JSON.parse(line));
   hints.forEach(hint => {
     const fromTo = hint.to
       ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]

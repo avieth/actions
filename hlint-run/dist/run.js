@@ -34,6 +34,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const core = __importStar(require("@actions/core"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+const os = __importStar(require("os"));
 const hlint_1 = require("./hlint");
 const bufferedExec_1 = __importDefault(require("./util/bufferedExec"));
 const withMatcherAtPath_1 = __importDefault(require("./util/withMatcherAtPath"));
@@ -52,7 +53,7 @@ function runHLint(cmd, args) {
 function readHLintFile(path) {
     return __awaiter(this, void 0, void 0, function* () {
         const fileContents = yield fs.promises.readFile(path, 'utf8');
-        const hints = JSON.parse(fileContents);
+        const hints = fileContents.split(os.EOL).flatMap(line => JSON.parse(line));
         hints.forEach(hint => {
             const fromTo = hint.to
                 ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]
