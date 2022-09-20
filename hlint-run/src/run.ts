@@ -47,7 +47,11 @@ async function runHLint(cmd: string, args: string[]): Promise<HLintResult> {
 
 async function readHLintFile(path: string): Promise<HLintResult> {
   const fileContents = await fs.promises.readFile(path, 'utf8');
-  const hints: Array<HLintIdea> = fileContents.split(os.EOL).flatMap(line => JSON.parse(line));
+  const hints: Array<HLintIdea> = fileContents
+    .split(os.EOL)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .flatMap(line => JSON.parse(line));
   hints.forEach(hint => {
     const fromTo = hint.to
       ? [`(Found: ${hint.from})`, `(Perhaps: ${hint.to})`]
