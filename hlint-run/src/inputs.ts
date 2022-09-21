@@ -32,6 +32,7 @@ function parseCheckMode(arg: string): CheckMode {
 }
 
 const INPUT_KEY_HLINT_BIN = 'hlint-bin';
+const INPUT_KEY_HLINT_BIN_IS_LITERAL = 'hlint-bin-is-literal';
 const INPUT_KEY_HLINT_FILES = 'path';
 const INPUT_KEY_HLINT_FAIL_MODE = 'fail-on';
 
@@ -39,9 +40,10 @@ export default function getInputs(): RunArgs {
   const hlintCmd = core.getInput(INPUT_KEY_HLINT_BIN, {required: false}) || 'hlint';
   const pathList = parseStringOrJsonArray(core.getInput(INPUT_KEY_HLINT_FILES, {required: false}) || '.');
   const failOn = parseCheckMode(core.getInput(INPUT_KEY_HLINT_FAIL_MODE, {required: false}) || 'NEVER');
+  const hlintCmdIsLiteral: boolean = JSON.parse(core.getInput(INPUT_KEY_HLINT_BIN_IS_LITERAL, {required: false}) || 'false');
 
   // NOTE: Because ncc compiles all the files, take care that __dirname represents the dist/ folder.
   const baseDir = path.join(__dirname, '..');
 
-  return {baseDir, hlintCmd, pathList, failOn};
+  return {baseDir, hlintCmd, pathList, failOn, hlintCmdIsLiteral};
 }

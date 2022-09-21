@@ -71,9 +71,9 @@ function getOverallCheckResult(failOn, { ideas, statusCode }) {
     }
     return { ok, hintSummary };
 }
-function run({ baseDir, hlintCmd, pathList, failOn }) {
+function run({ baseDir, hlintCmd, pathList, failOn, hlintCmdIsLiteral }) {
     return __awaiter(this, void 0, void 0, function* () {
-        const hlintArgs = ['-j', '--json', '--', ...pathList];
+        const hlintArgs = hlintCmdIsLiteral ? [] : ['-j', '--json', '--', ...pathList];
         const matcherDefPath = path.join(baseDir, hlint_1.MATCHER_DEF_PATH);
         const { ideas, statusCode } = yield (0, withMatcherAtPath_1.default)(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
         const { ok, hintSummary } = getOverallCheckResult(failOn, { ideas, statusCode });

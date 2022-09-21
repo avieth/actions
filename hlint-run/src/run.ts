@@ -17,6 +17,7 @@ export interface RunArgs {
   hlintCmd: string,
   pathList: string[],
   failOn: CheckMode,
+  hlintCmdIsLiteral: boolean,
 };
 
 export interface HLintResult {
@@ -66,8 +67,8 @@ function getOverallCheckResult(failOn: CheckMode, {ideas, statusCode}: HLintResu
   return {ok, hintSummary}
 }
 
-export default async function run({baseDir, hlintCmd, pathList, failOn}: RunArgs): Promise<RunResult> {
-  const hlintArgs = ['-j', '--json', '--', ...pathList]
+export default async function run({baseDir, hlintCmd, pathList, failOn, hlintCmdIsLiteral}: RunArgs): Promise<RunResult> {
+  const hlintArgs = hlintCmdIsLiteral ? [] : ['-j', '--json', '--', ...pathList];
   const matcherDefPath = path.join(baseDir, MATCHER_DEF_PATH);
   const {ideas, statusCode} = await withMatcherAtPath(matcherDefPath, () => runHLint(hlintCmd, hlintArgs));
   const {ok, hintSummary} = getOverallCheckResult(failOn, {ideas, statusCode});
